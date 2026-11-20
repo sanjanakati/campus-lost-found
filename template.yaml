@@ -1,0 +1,104 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Serverless Campus Lost and Found application using API Gateway, Lambda, DynamoDB, S3, SNS and CloudWatch.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 15
+    MemorySize: 256
+    CodeUri: src/
+    Handler: app.lambda_handler
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref LostFoundTable
+        BUCKET_NAME: !Ref LostFoundBucket
+        TOPIC_ARN: !Ref LostFoundTopic
+
+Resources:
+  LostFoundApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type'"
+        AllowOrigin: "'*'"
+
+  LostFoundFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref LostFoundTable
+        - S3CrudPolicy:
+            BucketName: !Ref LostFoundBucket
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt LostFoundTopic.TopicName
+      Events:
+        ListItems:
+          Type: Api
+          Properties:
+            RestApiId: !Ref LostFoundApi
+            Path: /items
+            Method: GET
+        CreateItem:
+          Type: Api
+          Properties:
+            RestApiId: !Ref LostFoundApi
+            Path: /items
+            Method: POST
+        UploadUrl:
+          Type: Api
+          Properties:
+            RestApiId: !Ref LostFoundApi
+            Path: /upload-url
+            Method: POST
+        Notify:
+          Type: Api
+          Properties:
+            RestApiId: !Ref LostFoundApi
+            Path: /notify
+            Method: POST
+
+  LostFoundTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: itemId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: itemId
+          KeyType: HASH
+
+  LostFoundBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, HEAD]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+
+  LostFoundTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Campus Lost and Found Notifications
+
+Outputs:
+  ApiUrl:
+    Description: Base URL for the deployed API
+    Value: !Sub "https://${LostFoundApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+  DynamoDBTable:
+    Value: !Ref LostFoundTable
+  S3Bucket:
+    Value: !Ref LostFoundBucket
+  SNSTopicArn:
+    Value: !Ref LostFoundTopic

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Campus Lost & Found</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f6fb;color:#172033}
+header{background:linear-gradient(120deg,#122b55,#2463a6);color:white;padding:30px 7%}
+header h1{margin:0 0 8px;font-size:30px}header p{margin:0;color:#dceaff}
+main{max-width:1050px;margin:28px auto;padding:0 18px;display:grid;grid-template-columns:360px 1fr;gap:22px}
+section{background:white;border-radius:14px;padding:22px;box-shadow:0 5px 20px #17203312}
+h2{margin-top:0;color:#16345f;font-size:20px}label{display:block;font-size:13px;font-weight:bold;margin:12px 0 5px}
+input,textarea,select{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:7px;font:inherit}
+textarea{min-height:75px;resize:vertical}button{border:0;background:#1766bd;color:white;padding:11px 16px;border-radius:7px;font-weight:bold;cursor:pointer;margin-top:14px}
+button.secondary{background:#e7eef8;color:#173b68;margin-left:6px}.item{border:1px solid #e1e8f1;border-radius:10px;padding:14px;margin:12px 0}
+.item h3{margin:0 0 6px}.meta{font-size:13px;color:#607087}.status{display:inline-block;background:#e4f6eb;color:#16723a;padding:4px 8px;border-radius:20px;font-size:11px}
+#message{margin-top:10px;font-size:13px;color:#17633a;white-space:pre-wrap}.hint{font-size:12px;color:#69788e;line-height:1.5}
+@media(max-width:760px){main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>Campus Lost & Found</h1><p>A serverless AWS-powered portal to report and discover lost items on campus.</p></header>
+<main>
+<section>
+<h2>Report an item</h2>
+<form id="itemForm">
+<label>Item title</label><input name="title" required placeholder="e.g. Black water bottle">
+<label>Description</label><textarea name="description" required placeholder="Describe the item"></textarea>
+<label>Category</label><select name="category"><option>Electronics</option><option>Books</option><option>Accessories</option><option>Clothing</option><option>Other</option></select>
+<label>Last seen / found location</label><input name="location" required placeholder="e.g. Library, Block A">
+<label>Contact information</label><input name="contact" required placeholder="Email or phone">
+<button type="submit">Submit report</button>
+</form>
+<div id="message"></div>
+<p class="hint">Demo note: do not enter sensitive personal information. This student demo stores the contact field as submitted.</p>
+</section>
+<section>
+<h2>Recently reported items</h2>
+<button class="secondary" id="refresh">Refresh list</button>
+<div id="items"><p class="hint">Connect the deployed API, then refresh to load reports.</p></div>
+<button id="notify">Send test notification</button>
+</section>
+</main>
+<script src="config.js"></script>
+<script>
+const base=window.API_BASE_URL;
+const msg=document.getElementById('message');
+async function api(path,options={}) {
+ if(!base || base.includes("PASTE_API")) throw new Error("Add the deployed API URL in frontend/config.js first.");
+ const r=await fetch(base+path,{...options,headers:{"Content-Type":"application/json",...(options.headers||{})}});
+ const data=await r.json(); if(!r.ok) throw new Error(data.error||"Request failed"); return data;
+}
+async function loadItems(){
+ const box=document.getElementById('items');
+ try{const data=await api('/items');box.innerHTML='';
+ if(!data.items.length){box.innerHTML='<p class="hint">No reports yet. Add the first one!</p>';return;}
+ data.items.forEach(x=>{const el=document.createElement('div');el.className='item';
+ const h=document.createElement('h3');h.textContent=x.title;
+ const d=document.createElement('p');d.textContent=x.description;
+ const m=document.createElement('p');m.className='meta';m.textContent=`${x.category} • ${x.location} • Contact: ${x.contact}`;
+ const s=document.createElement('span');s.className='status';s.textContent=x.status;
+ el.append(h,d,m,s);box.append(el);});
+ }catch(e){box.textContent=e.message;}
+}
+document.getElementById('itemForm').addEventListener('submit',async e=>{
+ e.preventDefault();msg.textContent='Submitting...';
+ const data=Object.fromEntries(new FormData(e.target).entries());
+ try{const result=await api('/items',{method:'POST',body:JSON.stringify(data)});msg.textContent=result.message;e.target.reset();loadItems();}
+ catch(err){msg.textContent=err.message;}
+});
+document.getElementById('refresh').onclick=loadItems;
+document.getElementById('notify').onclick=async()=>{
+ try{const r=await api('/notify',{method:'POST',body:JSON.stringify({message:'Demo: a new item has been reported on the Campus Lost & Found portal.'})});msg.textContent=r.message;}
+ catch(e){msg.textContent=e.message;}
+};
+loadItems();
+</script>
+</body></html>
